@@ -58,6 +58,6 @@ Contributions are welcome! If you have suggestions or improvements, feel free to
 
 ## License :memo:
 
-This project is licensed under the GNU V2 License - see the LICENSE file for details.
+This project is licensed under the GNU v3.0 License - see the LICENSE file for details.
 
 
