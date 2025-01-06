@@ -24,8 +24,8 @@ To get started with the project locally, follow these steps:
 1. **Clone the repository**:
 
    ```bash
-   git clone https://github.com/YourUsername/landing-page-analysis.git
-   cd landing-page-analysis
+   git clone https://github.com/YourUsername/lp-data-analysis-streamlit.git
+   cd lp-data-analysis-streamlit
    ```
 
 2. **Install dependencies**:
