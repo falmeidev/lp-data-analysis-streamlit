@@ -55,18 +55,25 @@ def get_data():
     # Return the results
     return df_bq
 
+# Initialize the state of the session
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+
 # Function to check the password
-def check_password():
+if not st.session_state.authenticated:
     password = st.text_input("Digite a senha para acessar o dashboard:", type="password")
     if password == st.secrets["credentials"]["password"]:
-        return True
+        st.session_state.authenticated = True
+        st.success("Senha correta! Acessando o dashboard...")
     elif password != "":
-        st.error("Senha incorreta")
-        return False
-    return False
+        st.error("Senha incorreta. Tente novamente.")
+
 
 # Try to access the application with the given password
-if check_password():
+if st.session_state.authenticated:
+
+    # Title of the dashboard
+    st.header("Landing Page Data Analysis - Orbital")
 
     # get the data
     data = get_data()
@@ -74,10 +81,53 @@ if check_password():
     # Delete the registers with 'user_pseudo_id' filled as 'unknown' registros onde `user_pseudo_id` é "unknown"
     data = data[data["user_pseudo_id"] != "unknown"]
 
+    # Select the unique user_pseudo_id and replace by a new identifier
+    unique_users = data["user_pseudo_id"].unique()
+    user_id_map = {user: idx for idx, user in enumerate(unique_users, start=1000)}
+
+    # Substituir user_pseudo_id por user_id
+    data["user_id"] = data["user_pseudo_id"].map(user_id_map)
+
     # Show a sample of the data
-    st.write("### Dados Carregados")
-    st.write("Registros com `user_pseudo_id = 'unknown'` foram eliminados.")
-    st.dataframe(data[['event_date','event_timestamp','event_name','utm_term','frase']], height=300)  # Enable the scroll with fixed height
+    # st.write("### Dados Carregados")
+    # st.write("Registros com `user_pseudo_id = 'unknown'` foram eliminados.")
+    # st.dataframe(data[['event_date','event_timestamp','user_id','event_name','utm_term','frase']], height=300)  # Enable the scroll with fixed height
+
+    # Apply filters
+
+    st.sidebar.header("Filtros")
+
+    # Filter by "event_name"
+    st.sidebar.subheader("Filtrar por Event Name")
+    st.sidebar.write("Por padrão, os eventos selecionados são:")
+    default_events = ['first_visit', 'user_engagement', 'envio_leads_leadster']
+    for event in default_events:
+        st.sidebar.markdown(f"- {event}")
+    event_names = data["event_name"].unique()
+    selected_events = st.sidebar.multiselect("Selecione um ou mais eventos para análise:", ["Todos","Default"] + list(event_names), default="Default")
+    print(selected_events)
+
+    # Filter by "utm_term"
+    st.sidebar.subheader("Filtrar por UTM Term")
+    utm_terms = data["utm_term"].unique()
+    selected_terms = st.sidebar.multiselect("Selecione um ou mais eventos para análise:", ["Todos"] + list(utm_terms), default="Todos")
+    print(selected_terms)
+
+    # Apply the filter
+    if "Todos" in selected_events and "Todos" in selected_terms:
+        filtered_data = data
+    elif "Default" in selected_events and "Todos" in selected_terms: 
+        filtered_data = data[data["event_name"].isin(default_events)]
+        print(filtered_data[["event_name"]].drop_duplicates())
+    elif "Todos" in selected_events and "Todos" not in selected_terms:
+        filtered_data = data[data["utm_term"].isin(selected_terms)]
+    elif "Todos" not in selected_events and "Default" not in selected_events and "Todos" in selected_terms:
+        filtered_data = data[data["event_name"].isin(selected_events)]
+        print(filtered_data[["event_name"]].drop_duplicates())
+    else:
+        filtered_data = data[(data["event_name"].isin(selected_events)) & (data["utm_term"].isin(selected_terms))]
+    
+    filtered_data.head()
 
     # Create the cards with the number of clients in each step
     st.subheader("Indicadores de Etapas do Funil")
@@ -102,22 +152,13 @@ if check_password():
         with coluna:
             st.metric(label=etapas[list(etapas.keys())[i]], value=valores[i])
 
-    # Filter by `event_name`
-    st.subheader("Filtrar por Event Name")
-    event_names = data["event_name"].unique()
-    selected_event = st.selectbox("Selecione um evento para análise:", ["Todos"] + list(event_names))
-
-    # Apply the filter
-    if selected_event != "Todos":
-        filtered_data = data[data["event_name"] == selected_event]
-    else:
-        filtered_data = data
-
-    st.write(f"### Dados para o evento: {selected_event}")
+    st.write(f"### Dados para o evento: {selected_events}")
     st.dataframe(filtered_data[['event_date','event_timestamp','event_name','utm_term','frase']], height=300)  # Enable scroll for the table
 
     # Create the wordcloud
     st.subheader("Nuvem de Palavras")
+
+    st.write("Palavras com ao menos 4 dígitos, e que aparecem na frase do evento selecionado.")
 
     # Select unique values
     filtered_data1 = filtered_data[['user_pseudo_id','frase','utm_term']].drop_duplicates() 
@@ -132,7 +173,6 @@ if check_password():
     # Create the wordcloud
     wordcloud_all = WordCloud(width=800, height=400, background_color="white").generate(" ".join(words_filtered))
 
-    st.write("Nuvem de Palavras")
     fig, ax = plt.subplots(figsize=(10, 5))
     ax.imshow(wordcloud_all, interpolation="bilinear")
     ax.axis("off")
@@ -153,35 +193,21 @@ if check_password():
 
     # Exibe the table with most frequent words
     with col1:
-        st.write("### Palavras mais frequentes no texto")
+        st.write("Palavras mais frequentes no texto")
         st.dataframe(word_freq_df, height=300)  # Enable scroll for the table)
 
     with col2:
-        st.write("### Palavras mais frequentes no utm term")
+        st.write("Palavras mais frequentes no utm term")
         st.dataframe(word_freq_term_df, height=300)  # Enable scroll for the table)
     # st.write("### Palavras mais frequentes no texto")
     # st.dataframe(word_freq_df)
 
-    # Mostrar desempenho da Landing Page
+    # Show the performance of the landing page
     st.subheader("Desempenho da LP")
 
-    # Filter by `event_name`
-    st.write("Por padrão, os eventos selecionados são:")
-    default_events = ['first_visit', 'user_engagement', 'envio_leads_leadster']
-    for event in default_events:
-        st.markdown(f"- {event}")
-
-    selected_events = st.multiselect("Selecione um evento para análise:", ["Default"] + list(event_names), default="Default")
-
-    # Apply the filter
-    if "Default" not in selected_events: 
-        filtered_data1 = data[data["event_name"].isin(selected_events)]
-    else:
-        filtered_data1 = data[data["event_name"].isin(default_events)]
-
-    # Contar clientes únicos por evento e data
+    # Count unique customers by event and date
     aggregated_data = (
-        filtered_data1.groupby(["event_date", "event_name"])["user_pseudo_id"]
+        filtered_data.groupby(["event_date", "event_name"])["user_pseudo_id"]
         .nunique()
         .reset_index()
         .rename(columns={"user_pseudo_id": "unique_users"})
@@ -199,5 +225,8 @@ if check_password():
     )
     st.plotly_chart(fig)
 
+    # Show the UTM term performance in generating the phrase
+    st.subheader("UTM Term versus Frase")
+    st.dataframe(filtered_data1[["frase","utm_term"]].drop_duplicates())
 else:
-    st.write("Por favor, insira a senha correta para acessar o conteúdo.")
+    st.write("Aguardando inserção da senha correta para acessar o conteúdo...")
