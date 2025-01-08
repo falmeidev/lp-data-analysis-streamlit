@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 from wordcloud import WordCloud
 from collections import Counter
 import re
+import plotly.express as px
 
 # Get the data via API from BigQuery
 @st.cache_data
@@ -159,7 +160,44 @@ if check_password():
         st.write("### Palavras mais frequentes no utm term")
         st.dataframe(word_freq_term_df, height=300)  # Enable scroll for the table)
     # st.write("### Palavras mais frequentes no texto")
-    # st.dataframe(word_freq_df, 
+    # st.dataframe(word_freq_df)
+
+    # Mostrar desempenho da Landing Page
+    st.subheader("Desempenho da LP")
+
+    # Filter by `event_name`
+    st.write("Por padrão, os eventos selecionados são:")
+    default_events = ['first_visit', 'user_engagement', 'envio_leads_leadster']
+    for event in default_events:
+        st.markdown(f"- {event}")
+
+    selected_events = st.multiselect("Selecione um evento para análise:", ["Default"] + list(event_names), default="Default")
+
+    # Apply the filter
+    if "Default" not in selected_events: 
+        filtered_data1 = data[data["event_name"].isin(selected_events)]
+    else:
+        filtered_data1 = data[data["event_name"].isin(default_events)]
+
+    # Contar clientes únicos por evento e data
+    aggregated_data = (
+        filtered_data1.groupby(["event_date", "event_name"])["user_pseudo_id"]
+        .nunique()
+        .reset_index()
+        .rename(columns={"user_pseudo_id": "unique_users"})
+    )
+
+    # Gráfico de linhas
+    if not aggregated_data.empty:
+        fig = px.line(
+            aggregated_data,
+            x="event_date",
+            y="unique_users",
+            color="event_name",
+            title="Clientes únicos por evento ao longo do tempo",
+            labels={"unique_users": "Clientes Únicos", "event_date": "Data"},
+    )
+    st.plotly_chart(fig)
 
 else:
     st.write("Por favor, insira a senha correta para acessar o conteúdo.")
