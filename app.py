@@ -35,10 +35,12 @@ def get_data():
         PARSE_DATE('%Y%m%d', event_date) AS event_date,
         FORMAT_TIMESTAMP('%H:%M:%S', TIMESTAMP_MICROS(event_timestamp)) AS event_timestamp,
         event_name,
-        user_pseudo_id,
+        user_pseudo_id
     FROM 
-        `orbital-station-6a5ab.analytics_308291533.events_*`
+        `orbital-station-6a5ab.analytics_308291533.events_*`,
+        UNNEST(event_params) AS event_params 
     WHERE PARSE_DATE('%Y%m%d', event_date) >= "2024-12-12"
+        AND event_params.value.string_value LIKE "%produtos.orbital.company%"
     GROUP BY 
         ALL
     )
