@@ -107,28 +107,42 @@ if st.session_state.authenticated:
         st.sidebar.markdown(f"- {event}")
     event_names = data["event_name"].unique()
     selected_events = st.sidebar.multiselect("Selecione um ou mais eventos para análise:", ["Todos","Default"] + list(event_names), default="Default")
-    print(selected_events)
+    #print(selected_events)
 
     # Filter by "utm_term"
     st.sidebar.subheader("Filtrar por UTM Term")
     utm_terms = data["utm_term"].unique()
     selected_terms = st.sidebar.multiselect("Selecione um ou mais eventos para análise:", ["Todos"] + list(utm_terms), default="Todos")
-    print(selected_terms)
+    #print(selected_terms)
 
-    # Apply the filter
+    # Filter by "Period"
+    st.sidebar.subheader("Filtrar por período")
+    initial_date = data["event_date"].min() 
+    final_date =  data["event_date"].max()
+    date_interval = st.sidebar.slider("Selecione o período", 
+                                      min_value=initial_date, 
+                                      max_value= final_date, 
+                                      value=(initial_date,final_date))
+
+
+    # Apply the filters by event_name and UTM term
     if "Todos" in selected_events and "Todos" in selected_terms:
         filtered_data = data
     elif "Default" in selected_events and "Todos" in selected_terms: 
         filtered_data = data[data["event_name"].isin(default_events)]
-        print(filtered_data[["event_name"]].drop_duplicates())
+        #print(filtered_data[["event_name"]].drop_duplicates())
     elif "Todos" in selected_events and "Todos" not in selected_terms:
         filtered_data = data[data["utm_term"].isin(selected_terms)]
     elif "Todos" not in selected_events and "Default" not in selected_events and "Todos" in selected_terms:
         filtered_data = data[data["event_name"].isin(selected_events)]
-        print(filtered_data[["event_name"]].drop_duplicates())
+        #print(filtered_data[["event_name"]].drop_duplicates())
     else:
         filtered_data = data[(data["event_name"].isin(selected_events)) & (data["utm_term"].isin(selected_terms))]
     
+    # Apply the period filter
+    filtered_data = filtered_data[(filtered_data["event_date"] >= date_interval[0]) & (filtered_data["event_date"] <= date_interval[1])] 
+    print(filtered_data["event_date"].min())
+    print(filtered_data["event_date"].max())
     filtered_data.head()
 
     # Create the cards with the number of clients in each step
@@ -143,8 +157,9 @@ if st.session_state.authenticated:
     }
 
     # Create the numbers of each step
+    indicators_data = data[(data["event_date"] >= date_interval[0]) & (data["event_date"] <= date_interval[1])] 
     valores = [
-        data[data["event_name"] == evento]["user_pseudo_id"].nunique()
+        indicators_data[indicators_data["event_name"] == evento]["user_pseudo_id"].nunique()
         for evento in etapas.keys()
     ]
 
@@ -155,7 +170,7 @@ if st.session_state.authenticated:
             st.metric(label=etapas[list(etapas.keys())[i]], value=valores[i])
 
     st.write(f"### Dados para o evento: {selected_events}")
-    st.dataframe(filtered_data[['event_date','event_timestamp','event_name','utm_term','frase']], height=300)  # Enable scroll for the table
+    st.dataframe(filtered_data[['event_date','user_id','event_name','utm_term','frase']].sort_values("event_date"), height=300)  # Enable scroll for the table
 
     # Create the wordcloud
     st.subheader("Nuvem de Palavras")
