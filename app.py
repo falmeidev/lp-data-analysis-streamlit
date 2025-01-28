@@ -1,5 +1,6 @@
 import os 
 from google.cloud import bigquery
+from google.oauth2.service_account import Credentials
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -11,10 +12,23 @@ import plotly.express as px
 # Get the data via API from BigQuery
 @st.cache_data
 def get_data():
-    # set the service account key file
-    os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = './orbital-station-6a5ab-a81b4ea97b16.json'
+    # extract credentials from secret
+    service_account_info = {
+        "type": st.secrets["gcp_service_account"]["type"],
+        "project_id": st.secrets["gcp_service_account"]["project_id"],
+        "private_key_id": st.secrets["gcp_service_account"]["private_key_id"],
+        "private_key": st.secrets["gcp_service_account"]["private_key"],
+        "client_email": st.secrets["gcp_service_account"]["client_email"],
+        "client_id": st.secrets["gcp_service_account"]["client_id"],
+        "auth_uri": st.secrets["gcp_service_account"]["auth_uri"],
+        "token_uri": st.secrets["gcp_service_account"]["token_uri"],
+        "auth_provider_x509_cert_url": st.secrets["gcp_service_account"]["auth_provider_x509_cert_url"],
+        "client_x509_cert_url": st.secrets["gcp_service_account"]["client_x509_cert_url"],
+    }
+    # create the credentials
+    credentials = Credentials.from_service_account_info(service_account_info)
     # configure the client
-    client = bigquery.Client()
+    client = bigquery.Client(credentials=credentials, project=credentials.project_id)
     # build the query to consult the data
     sql_query = """
     WITH 
