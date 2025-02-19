@@ -8,6 +8,7 @@ from wordcloud import WordCloud
 from collections import Counter
 import re
 import plotly.express as px
+import seaborn as sns
 
 # Get the data via API from BigQuery
 @st.cache_data
@@ -31,7 +32,7 @@ def get_data():
     client = bigquery.Client(credentials=credentials, project=credentials.project_id)
     # build the query to consult the data
     sql_query = """
-    WITH 
+        WITH 
     frases AS (
     SELECT 
         user_pseudo_id,
@@ -57,13 +58,49 @@ def get_data():
         AND event_params.value.string_value LIKE "%produtos.orbital.company%"
     GROUP BY 
         ALL
-    )
+    ),
+    perfil AS (
     SELECT 
-    eventos.*,
-    frases.utm_term,
-    frases.frase
+      user_pseudo_id,
+      MAX(IF(user_properties.key IN ("buyer_behavior"), user_properties.value.string_value, NULL)) AS buyer_behavior,
+      MAX(IF(user_properties.key IN ("age"), user_properties.value.string_value, NULL)) AS age,
+      MAX(IF(user_properties.key IN ("marital"), user_properties.value.string_value, NULL)) AS marital,
+      MAX(IF(user_properties.key IN ("connection_place"), user_properties.value.string_value, NULL)) AS connection_place,
+      MAX(IF(user_properties.key IN ("everyone_category"), user_properties.value.string_value, NULL)) AS everyone_category,
+      MAX(IF(user_properties.key IN ("connection_company"), user_properties.value.string_value, NULL)) AS connection_company,
+      MAX(IF(user_properties.key IN ("product_interest"), user_properties.value.string_value, NULL)) AS product_interest,
+      MAX(IF(user_properties.key IN ("income"), user_properties.value.string_value, NULL)) AS income,
+      MAX(IF(user_properties.key IN ("connection"), user_properties.value.string_value, NULL)) AS connection,
+      MAX(IF(user_properties.key IN ("gender"), user_properties.value.string_value, NULL)) AS gender,
+      MAX(IF(user_properties.key IN ("education"), user_properties.value.string_value, NULL)) AS education,
+      MAX(IF(user_properties.key IN ("user_interest"), user_properties.value.string_value, NULL)) AS user_interest
+    FROM 
+        `orbital-station-6a5ab.analytics_308291533.events_*`,
+        UNNEST(user_properties) AS user_properties 
+    WHERE PARSE_DATE('%Y%m%d', event_date) >= "2024-12-12"
+    GROUP BY 
+    ALL
+    )
+  
+    SELECT 
+        eventos.*,
+        frases.utm_term,
+        frases.frase,
+        perfil.buyer_behavior,
+        perfil.age,
+        perfil.marital,
+        perfil.connection_place,
+        perfil.everyone_category,
+        perfil.connection_company,
+        perfil.product_interest,
+        perfil.income,
+        perfil.connection,
+        perfil.gender,
+        perfil.education,
+        perfil.user_interest
     FROM eventos
     LEFT JOIN frases ON frases.user_pseudo_id = eventos.user_pseudo_id
+    LEFT JOIN perfil ON perfil.user_pseudo_id = eventos.user_pseudo_id
     """
     # execute the consult and convert in a dataframe
     query_job = client.query(sql_query)  # execute the consult
@@ -104,21 +141,32 @@ if st.session_state.authenticated:
     # Substituir user_pseudo_id por user_id
     data["user_id"] = data["user_pseudo_id"].map(user_id_map)
 
-    # Show a sample of the data
-    # st.write("### Dados Carregados")
-    # st.write("Registros com `user_pseudo_id = 'unknown'` foram eliminados.")
-    # st.dataframe(data[['event_date','event_timestamp','user_id','event_name','utm_term','frase']], height=300)  # Enable the scroll with fixed height
+    # Standardize conversion events
+    # List of the events that need to be renamed to "lead"
+    lead_events = [
+        "conversion_event_contact", "envio_leads_leadster", "leadster",
+        "orbital_tap_botao_whats", "new_lead", "lalendly", "lead", "novo_lead___leadster"
+    ]
+    data["event_name"] = data["event_name"].str.lower().replace(lead_events, "lead")
 
-    # Apply filters
-
+    # Filters
     st.sidebar.header("Filtros")
 
+    # Filter by "Period"
+    st.sidebar.subheader("Filtrar por período")
+    initial_date = data["event_date"].min() 
+    final_date =  data["event_date"].max()
+    date_interval = st.sidebar.slider("Selecione o período:", 
+                                      min_value=initial_date, 
+                                      max_value= final_date, 
+                                      value=(initial_date,final_date))
+    
     # Filter by "event_name"
     st.sidebar.subheader("Filtrar por Event Name")
-    st.sidebar.write("Por padrão, os eventos selecionados são:")
-    default_events = ['first_visit', 'user_engagement', 'envio_leads_leadster']
-    for event in default_events:
-        st.sidebar.markdown(f"- {event}")
+    st.sidebar.write("Por padrão, o evento selecionado é: 'lead'")
+    default_events = ['lead']
+    # for event in default_events:
+    #     st.sidebar.markdown(f"- {event}")
     event_names = data["event_name"].unique()
     selected_events = st.sidebar.multiselect("Selecione um ou mais eventos para análise:", ["Todos","Default"] + list(event_names), default="Default")
     #print(selected_events)
@@ -128,16 +176,6 @@ if st.session_state.authenticated:
     utm_terms = data["utm_term"].unique()
     selected_terms = st.sidebar.multiselect("Selecione um ou mais eventos para análise:", ["Todos"] + list(utm_terms), default="Todos")
     #print(selected_terms)
-
-    # Filter by "Period"
-    st.sidebar.subheader("Filtrar por período")
-    initial_date = data["event_date"].min() 
-    final_date =  data["event_date"].max()
-    date_interval = st.sidebar.slider("Selecione o período", 
-                                      min_value=initial_date, 
-                                      max_value= final_date, 
-                                      value=(initial_date,final_date))
-
 
     # Apply the filters by event_name and UTM term
     if "Todos" in selected_events and "Todos" in selected_terms:
@@ -163,11 +201,11 @@ if st.session_state.authenticated:
     st.subheader("Indicadores de Etapas do Funil")
 
     etapas = {
-        "Etapa - 0 - Iniciar": "Iniciar Forms",
-        "Etapa - 1 - name": "Preencher Nome",
-        "Etapa - 2 - email": "Preencher E-mail",
-        "Etapa - 3 - phone": "Preencher Tel.",
-        "envio_leads_leadster": "Envio lead",
+        "etapa - 0 - iniciar": "Iniciar Forms",
+        "etapa - 1 - name": "Preencher Nome",
+        "etapa - 2 - email": "Preencher E-mail",
+        "etapa - 3 - phone": "Preencher Tel.",
+        "lead": "Envio lead",
     }
 
     # Create the numbers of each step
@@ -183,8 +221,8 @@ if st.session_state.authenticated:
         with coluna:
             st.metric(label=etapas[list(etapas.keys())[i]], value=valores[i])
 
-    st.write(f"### Dados para o evento: {selected_events}")
-    st.dataframe(filtered_data[['event_date','user_id','event_name','utm_term','frase']].sort_values("event_date"), height=300)  # Enable scroll for the table
+    #st.write(f"### Dados para o evento: {selected_events}")
+    #st.dataframe(filtered_data[['event_date','user_id','event_name','utm_term','frase']].sort_values("event_date"), height=300)  # Enable scroll for the table
 
     # Create the wordcloud
     st.subheader("Nuvem de Palavras")
@@ -192,14 +230,18 @@ if st.session_state.authenticated:
     st.write("Palavras com ao menos 4 dígitos, e que aparecem na frase do evento selecionado.")
 
     # Select unique values
-    filtered_data1 = filtered_data[['user_pseudo_id','frase','utm_term']].drop_duplicates() 
+    filtered_data_terms = filtered_data[['user_id','frase','utm_term']].drop_duplicates() 
     # Workcloud of the filtered data
-    all_words = " ".join(filtered_data1["frase"].astype(str))
-    all_words_term = " ".join(filtered_data1["utm_term"].astype(str))
+    all_words = " ".join(filtered_data_terms["frase"].astype(str))
+    all_words_term = " ".join(filtered_data_terms["utm_term"].astype(str))
 
     # Remove words with less then 4 digits
     words_filtered = re.findall(r'\b\w{4,}\b', all_words)
     words_filtered_term = re.findall(r'\b\w{2,}\b', all_words_term)
+
+    #################################################
+    ############# Term Influence Info ###############
+    #################################################
 
     # Create the wordcloud
     wordcloud_all = WordCloud(width=800, height=400, background_color="white").generate(" ".join(words_filtered))
@@ -244,7 +286,7 @@ if st.session_state.authenticated:
         .rename(columns={"user_pseudo_id": "unique_users"})
     )
 
-    # Gráfico de linhas
+    # Line chart
     if not aggregated_data.empty:
         fig = px.line(
             aggregated_data,
@@ -252,12 +294,70 @@ if st.session_state.authenticated:
             y="unique_users",
             color="event_name",
             title="Clientes únicos por evento ao longo do tempo",
-            labels={"unique_users": "Clientes Únicos", "event_date": "Data"},
+            labels={"unique_users": "Clientes Únicos", "event_date": "Data"}
     )
     st.plotly_chart(fig)
 
     # Show the UTM term performance in generating the phrase
     st.subheader("UTM Term versus Frase")
-    st.dataframe(filtered_data1[["frase","utm_term"]].drop_duplicates())
+    st.dataframe(filtered_data_terms[["user_id","frase","utm_term"]].drop_duplicates())
+    #st.dataframe(filtered_data[["event_date","event_name","utm_term"]].drop_duplicates())
+
+    ############################################
+    ############## Profile Info ################
+    ############################################
+
+    # Create the features
+    features = ["buyer_behavior","age","marital","connection_place","everyone_category","connection_company",
+                "product_interest","income","connection","gender","education","user_interest"]
+    
+    # Perfis dos usuários
+    st.subheader("Dados gerais de perfis dos visitantes")
+    cols = ["event_date","event_name","user_id"] + features
+    st.dataframe(filtered_data[cols].drop_duplicates().sort_values("event_date", ascending=False))   
+    
+    # Age distribution 
+    # st.subheader("Distribuição por idade")
+    # fig, ax = plt.subplots()
+    # sns.histplot(filtered_data[cols].drop_duplicates()["age"], bins=20, kde=True, ax=ax, color='#2b758e',line_kws={'color': 'black'})
+    # #ax.set_title("Distribuição de Idade dos Usuários")
+    # st.pyplot(fig)
+    fig = px.histogram(
+    filtered_data[cols].drop("event_date", axis=1).drop_duplicates(),  # Remove duplicatas
+    x="age",
+    nbins=20,  # Número de bins
+    title="Distribuição de Idade dos Usuários",
+    color_discrete_sequence=["#2B758E"],  # Define a cor principal
+    )
+    # Adicionando a linha KDE (densidade) manualmente
+    fig.update_layout(
+        xaxis_title="Idade",
+        yaxis_title="Frequência",
+        bargap=0.1,  # Ajusta o espaçamento entre as barras
+        showlegend=False,  # Oculta legenda para um visual mais limpo
+    )
+    st.plotly_chart(fig)
+
+    # Conversion Rate by selected feature
+    # # Include a filter to profile feature - to conversion rate
+    st.subheader(f"Taxa de conversão por perfil")
+    profile_feature_selected = st.selectbox("# Selecione a característica desejada:", features)
+    st.write(f"##### Taxa de conversão por {profile_feature_selected}")
+    conversion_by_x = filtered_data[cols].drop_duplicates().groupby(profile_feature_selected)["event_name"].apply(lambda x: (x == "lead").mean()).reset_index()
+    conversion_by_x.columns = [profile_feature_selected, "conversion_rate"]
+    fig = px.bar(conversion_by_x, x=profile_feature_selected, y="conversion_rate",  
+                 color_discrete_sequence=["#2B758E"],
+                labels={  # Define os nomes personalizados dos eixos
+                    profile_feature_selected: f"Perfil do Cliente: {profile_feature_selected}",  # Nome do eixo X
+                    "conversion_rate": "Taxa de Conversão (%)"  # Nome do eixo Y
+                })
+    st.plotly_chart(fig)
+
+    fig.update_layout(
+        xaxis_title="Perfil do Cliente",
+        yaxis_title="Taxa de Conversão (%)",
+        yaxis=dict(tickformat=".1%")
+    )
+
 else:
     st.write("Aguardando inserção da senha correta para acessar o conteúdo...")
