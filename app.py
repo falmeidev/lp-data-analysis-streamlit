@@ -32,7 +32,7 @@ def get_data():
     client = bigquery.Client(credentials=credentials, project=credentials.project_id)
     # build the query to consult the data
     sql_query = """
-        WITH 
+    WITH 
     frases AS (
     SELECT 
         user_pseudo_id,
@@ -145,7 +145,7 @@ if st.session_state.authenticated:
     # List of the events that need to be renamed to "lead"
     lead_events = [
         "conversion_event_contact", "envio_leads_leadster", "leadster",
-        "orbital_tap_botao_whats", "new_lead", "lalendly", "lead", "novo_lead___leadster"
+        "orbital_tap_botao_whats", "new_lead", "calendly", "lead", "novo_lead___leadster"
     ]
     data["event_name"] = data["event_name"].str.lower().replace(lead_events, "lead")
 
@@ -174,7 +174,7 @@ if st.session_state.authenticated:
     # Filter by "utm_term"
     st.sidebar.subheader("Filtrar por UTM Term")
     utm_terms = data["utm_term"].unique()
-    selected_terms = st.sidebar.multiselect("Selecione um ou mais eventos para análise:", ["Todos"] + list(utm_terms), default="Todos")
+    selected_terms = st.sidebar.multiselect("Selecione um ou mais UTM Terms para análise:", ["Todos"] + list(utm_terms), default="Todos")
     #print(selected_terms)
 
     # Apply the filters by event_name and UTM term
@@ -312,7 +312,7 @@ if st.session_state.authenticated:
                 "product_interest","income","connection","gender","education","user_interest"]
     
     # Perfis dos usuários
-    st.subheader("Dados gerais de perfis dos visitantes")
+    st.subheader("Dados gerais sobre os perfis dos visitantes")
     cols = ["event_date","event_name","user_id"] + features
     st.dataframe(filtered_data[cols].drop_duplicates().sort_values("event_date", ascending=False))   
     
@@ -322,30 +322,25 @@ if st.session_state.authenticated:
     # sns.histplot(filtered_data[cols].drop_duplicates()["age"], bins=20, kde=True, ax=ax, color='#2b758e',line_kws={'color': 'black'})
     # #ax.set_title("Distribuição de Idade dos Usuários")
     # st.pyplot(fig)
-    fig = px.histogram(
-    filtered_data[cols].drop("event_date", axis=1).drop_duplicates(),  # Remove duplicatas
-    x="age",
-    nbins=20,  # Número de bins
-    title="Distribuição de Idade dos Usuários",
-    color_discrete_sequence=["#2B758E"],  # Define a cor principal
-    )
-    # Adicionando a linha KDE (densidade) manualmente
-    fig.update_layout(
-        xaxis_title="Idade",
-        yaxis_title="Frequência",
-        bargap=0.1,  # Ajusta o espaçamento entre as barras
-        showlegend=False,  # Oculta legenda para um visual mais limpo
-    )
-    st.plotly_chart(fig)
 
     # Conversion Rate by selected feature
     # # Include a filter to profile feature - to conversion rate
-    st.subheader(f"Taxa de conversão por perfil")
+    st.subheader(f"Métricas por Perfil")
     profile_feature_selected = st.selectbox("# Selecione a característica desejada:", features)
-    st.write(f"##### Taxa de conversão por {profile_feature_selected}")
-    conversion_by_x = filtered_data[cols].drop_duplicates().groupby(profile_feature_selected)["event_name"].apply(lambda x: (x == "lead").mean()).reset_index()
-    conversion_by_x.columns = [profile_feature_selected, "conversion_rate"]
-    fig = px.bar(conversion_by_x, x=profile_feature_selected, y="conversion_rate",  
+    # Count unique user by profile feature
+    cols_selected = ["event_date","event_name","user_id"] + [profile_feature_selected]
+    user_per_profile = filtered_data[cols_selected].groupby(profile_feature_selected)["user_id"].nunique()
+    # Count unique users by event "lead"
+    lead_users_per_profile = filtered_data[cols_selected][filtered_data[cols_selected]["event_name"] == "lead"].groupby(profile_feature_selected)["user_id"].nunique()
+    # Calculate conversion rate
+    conversion_rate = (lead_users_per_profile / user_per_profile * 100).round(2).fillna(0)
+    # Create dataframe
+    conversion_df = conversion_rate.reset_index()
+    conversion_df.columns = [profile_feature_selected, "conversion_rate"]
+    st.write(f"##### Taxa de conversão por: {profile_feature_selected}")
+    #conversion_by_x = filtered_data[cols].drop(["event_date"], axis=1).drop_duplicates().groupby(profile_feature_selected)["event_name"].apply(lambda x: (x == "lead").mean()).reset_index()
+    #conversion_by_x.columns = [profile_feature_selected, "conversion_rate"]
+    fig = px.bar(conversion_df, x=profile_feature_selected, y="conversion_rate",  
                  color_discrete_sequence=["#2B758E"],
                 labels={  # Define os nomes personalizados dos eixos
                     profile_feature_selected: f"Perfil do Cliente: {profile_feature_selected}",  # Nome do eixo X
@@ -358,6 +353,24 @@ if st.session_state.authenticated:
         yaxis_title="Taxa de Conversão (%)",
         yaxis=dict(tickformat=".1%")
     )
+
+    # Distribution by selected feature
+    st.write(f"##### Distribuição por: {profile_feature_selected}")
+    fig = px.histogram(
+    filtered_data[cols_selected].drop(["event_date","event_name"], axis=1).drop_duplicates(),  # Remove duplicatas
+    x=profile_feature_selected,
+    nbins=20,  # Número de bins
+    #title=f"Distribuição dos Usuários",
+    color_discrete_sequence=["#2B758E"],  # Define a cor principal
+    )
+    # Adicionando a linha KDE (densidade) manualmente
+    fig.update_layout(
+        xaxis_title=f"Perfil do Cliente: {profile_feature_selected}",
+        yaxis_title="Frequência (Núm. Clientes)",
+        bargap=0.1,  # Ajusta o espaçamento entre as barras
+        showlegend=False,  # Oculta legenda para um visual mais limpo
+    )
+    st.plotly_chart(fig)
 
 else:
     st.write("Aguardando inserção da senha correta para acessar o conteúdo...")
