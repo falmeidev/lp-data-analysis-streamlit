@@ -314,14 +314,58 @@ if st.session_state.authenticated:
     # Perfis dos usuários
     st.subheader("Dados gerais sobre os perfis dos visitantes")
     cols = ["event_date","event_name","user_id"] + features
-    st.dataframe(filtered_data[cols].drop_duplicates().sort_values("event_date", ascending=False))   
-    
-    # Age distribution 
-    # st.subheader("Distribuição por idade")
-    # fig, ax = plt.subplots()
-    # sns.histplot(filtered_data[cols].drop_duplicates()["age"], bins=20, kde=True, ax=ax, color='#2b758e',line_kws={'color': 'black'})
-    # #ax.set_title("Distribuição de Idade dos Usuários")
-    # st.pyplot(fig)
+
+    # WordClouds Profile 
+    # Create columns side by side
+    col1, col2 = st.columns(2)
+
+    # Exibe the table with most frequent words
+    with col1:
+        st.write("###### Comportamento de comprador")
+        all_words_bb = " ".join(filtered_data[cols].drop_duplicates()["buyer_behavior"].astype(str)).replace(",","")
+        all_words_bb_filtered = re.findall(r'\b\w{3,}\b', all_words_bb)
+        wordcloud_bb = WordCloud(width=800, height=400, background_color="white").generate((' '.join(all_words_bb_filtered).replace("None","")))
+        fig, ax = plt.subplots(figsize=(10, 5))
+        ax.imshow(wordcloud_bb, interpolation="bilinear")
+        ax.axis("off")
+        st.pyplot(fig)
+
+    with col2:
+        st.write("###### Produtos de interesse")
+        all_words_pi = " ".join(filtered_data[cols].drop_duplicates()["product_interest"].astype(str)).replace(",","")
+        all_words_pi_filtered = re.findall(r'\b\w{3,}\b', all_words_pi)
+        wordcloud_pi = WordCloud(width=800, height=400, background_color="white").generate((' '.join(all_words_pi_filtered).replace("None","")))
+        fig, ax = plt.subplots(figsize=(10, 5))
+        ax.imshow(wordcloud_pi, interpolation="bilinear")
+        ax.axis("off")
+        st.pyplot(fig)
+
+    # Exibe the table with most frequent words
+    with col1:
+        st.write("###### Interesses do usuário")
+        all_words_us = " ".join(filtered_data[cols].drop_duplicates()["user_interest"].astype(str)).replace(",","")
+        all_words_us_filtered = re.findall(r'\b\w{3,}\b', all_words_us)
+        wordcloud_us = WordCloud(width=800, height=400, background_color="white").generate((' '.join(all_words_us_filtered).replace("None","")))
+        fig, ax = plt.subplots(figsize=(10, 5))
+        ax.imshow(wordcloud_us, interpolation="bilinear")
+        ax.axis("off")
+        st.pyplot(fig)
+
+    with col2:
+        st.write("###### Métricas gerais de perfil")
+        filtered_data['agg_profile'] = filtered_data[["age","marital","connection_place","everyone_category","connection_company","income","connection","gender","education"]].astype(str).agg(' '.join, axis=1)
+        all_words_agg = " ".join(filtered_data.drop_duplicates()["agg_profile"].astype(str)).replace(",","")
+        all_words_agg_filtered = re.findall(r'\b\w{3,}\b', all_words_agg)
+        wordcloud_agg = WordCloud(width=800, height=400, background_color="white").generate((' '.join(all_words_agg_filtered).replace("None","")))
+        fig, ax = plt.subplots(figsize=(10, 5))
+        ax.imshow(wordcloud_agg, interpolation="bilinear")
+        ax.axis("off")
+        st.pyplot(fig)
+
+    # Dataframe com os dados
+    st.write("##### Tabela com informações do perfil")
+    st.dataframe(filtered_data[cols].drop_duplicates().sort_values("event_date", ascending=False))  
+
 
     # Conversion Rate by selected feature
     # # Include a filter to profile feature - to conversion rate
