@@ -353,9 +353,13 @@ if st.session_state.authenticated:
 
     with col2:
         st.write("###### Métricas gerais de perfil")
+        filtered_data["income"] = filtered_data["income"].str.replace(" ","").str.replace("/","")
+        filtered_data["age"] = filtered_data["age"].str.replace("-","a") 
         filtered_data['agg_profile'] = filtered_data[["age","marital","connection_place","everyone_category","connection_company","income","connection","gender","education"]].astype(str).agg(' '.join, axis=1)
         all_words_agg = " ".join(filtered_data.drop_duplicates()["agg_profile"].astype(str)).replace(",","")
-        all_words_agg_filtered = re.findall(r'\b\w{3,}\b', all_words_agg)
+        print(all_words_agg)
+        all_words_agg_filtered = re.findall(r'\b[\wÀ-ÿ0-9]{3,}\b', all_words_agg)
+        print(f"Filtrados: {all_words_agg_filtered}")
         wordcloud_agg = WordCloud(width=800, height=400, background_color="white").generate((' '.join(all_words_agg_filtered).replace("None","")))
         fig, ax = plt.subplots(figsize=(10, 5))
         ax.imshow(wordcloud_agg, interpolation="bilinear")
